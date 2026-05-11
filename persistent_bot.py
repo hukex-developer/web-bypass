@@ -54,7 +54,10 @@ def parse_cooldown(text):
 
 async def run_bot():
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)  # Set to True if you don't want to see the browser
+        # On servers (Render/Docker), headless must be True.
+        # Locally, you can set it to False if you want to see the browser.
+        headless_mode = os.environ.get("HEADLESS", "True").lower() == "true"
+        browser = await p.chromium.launch(headless=headless_mode)
         context = await browser.new_context()
         page = await context.new_page()
 

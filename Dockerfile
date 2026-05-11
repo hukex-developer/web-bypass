@@ -7,8 +7,9 @@ WORKDIR /app
 # Copy the script
 COPY persistent_bot.py .
 
-# Install dependencies
-RUN pip install playwright flask
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 # Browser dependencies are already in the base image, but we ensure chromium is installed
 RUN playwright install chromium
 
