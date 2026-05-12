@@ -69,10 +69,28 @@ async def run_bot():
         context = await browser.new_context()
         page = await context.new_page()
 
+        # Dialog handling shared state
+        dialog_data = {"wait_time": 0}
+        
+        async def handle_dialog(dialog):
+            print(f"Alert received: {dialog.message}")
+            cooldown = parse_cooldown(dialog.message)
+            if cooldown:
+                h, m = cooldown
+                dialog_data["wait_time"] = (h * 3600) + (m * 60) + 60
+            try:
+                await dialog.dismiss()
+            except Exception as e:
+                print(f"Could not dismiss dialog: {e}")
+
+        page.on("dialog", lambda d: asyncio.create_task(handle_dialog(d)))
+
         while True:
             try:
-                global STATUS, LAST_UPDATE, NEXT_RUN, SECONDS_REMAINING, SECONDS_UNTIL_CHECK
-                LAST_UPDATE = time.strftime('%H:%M:%S')
+                global STATUS, LAST_UPDATE, NEXT_RUN, SECONDS_REMAINING, SECONDS_UNTIL_CHECK, LAST_CHECK
+                LAST_UPDATE = time.strftime('%I:%M:%S %p')
+                LAST_CHECK = time.strftime('%I:%M:%S %p')
+                print(f"[{LAST_CHECK}] Refreshing target website: {URL}")
                 
                 await page.goto(URL)
                 await take_screenshot(page)
@@ -94,17 +112,7 @@ async def run_bot():
                     STATUS = "Submitting form..."
                     print("Clicking submit button...")
                     
-                    wait_time = 0
-                    def handle_dialog(dialog):
-                        nonlocal wait_time
-                        print(f"Alert received: {dialog.message}")
-                        cooldown = parse_cooldown(dialog.message)
-                        if cooldown:
-                            h, m = cooldown
-                            wait_time = (h * 3600) + (m * 60) + 60
-                        asyncio.create_task(dialog.dismiss())
-
-                    page.on("dialog", handle_dialog)
+                    dialog_data["wait_time"] = 0
                     try:
                         await submit_btn.click(force=True, timeout=5000)
                     except Exception as e:
@@ -112,15 +120,16 @@ async def run_bot():
                         await page.evaluate('document.querySelector("input[type=\\"submit\\"]").click()')
                     
                     await asyncio.sleep(2)
+                    wait_time = dialog_data["wait_time"]
                     await take_screenshot(page)
 
                     if wait_time > 0:
                         SECONDS_REMAINING = wait_time
-                        NEXT_RUN = time.strftime('%H:%M:%S', time.localtime(time.time() + wait_time))
+                        NEXT_RUN = time.strftime('%I:%M:%S %p', time.localtime(time.time() + wait_time))
                         
                         while SECONDS_REMAINING > 0:
-                            # Set Next Check to 1 hour or remaining time
-                            SECONDS_UNTIL_CHECK = min(SECONDS_REMAINING, 3600)
+                            # Set Next Check to 10 minutes or remaining time
+                            SECONDS_UNTIL_CHECK = min(SECONDS_REMAINING, 600)
                             
                             while SECONDS_UNTIL_CHECK > 0:
                                 m, s = divmod(SECONDS_REMAINING, 60)
@@ -131,14 +140,14 @@ async def run_bot():
                                 SECONDS_UNTIL_CHECK -= 1
                             
                             if SECONDS_REMAINING > 0:
-                                print("Hourly check: Re-verifying site status...")
+                                print("10-minute check: Re-verifying site status...")
                                 break # Re-run main navigation
                     else:
                         print("Submission successful! Waiting for 10-hour cycle...")
                         SECONDS_REMAINING = 10 * 3600
-                        NEXT_RUN = time.strftime('%H:%M:%S', time.localtime(time.time() + SECONDS_REMAINING))
+                        NEXT_RUN = time.strftime('%I:%M:%S %p', time.localtime(time.time() + SECONDS_REMAINING))
                         while SECONDS_REMAINING > 0:
-                            SECONDS_UNTIL_CHECK = min(SECONDS_REMAINING, 3600)
+                            SECONDS_UNTIL_CHECK = min(SECONDS_REMAINING, 600)
                             while SECONDS_UNTIL_CHECK > 0:
                                 m, s = divmod(SECONDS_REMAINING, 60)
                                 h, m = divmod(m, 60)
@@ -146,7 +155,7 @@ async def run_bot():
                                 await asyncio.sleep(1)
                                 SECONDS_REMAINING -= 1
                                 SECONDS_UNTIL_CHECK -= 1
-                            break # Re-check hourly
+                            break # Re-check every 10 minutes
                 else:
                     STATUS = "Error: Submit button not found. Retrying..."
                     await asyncio.sleep(60)
@@ -220,6 +229,10 @@ def home():
                     <div class="status-item">
                         <div class="label">Last Interaction</div>
                         <div class="value">{LAST_UPDATE}</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="label">Last Website Refresh</div>
+                        <div class="value" style="color: #2196f3;">{LAST_CHECK}</div>
                     </div>
                     <div class="status-item">
                         <div class="label">Scheduled Submission</div>
