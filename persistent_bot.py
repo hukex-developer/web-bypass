@@ -119,45 +119,42 @@ async def run_bot():
                         print(f"Click failed, trying JS click: {e}")
                         await page.evaluate('document.querySelector("input[type=\\"submit\\"]").click()')
                     
-                    await asyncio.sleep(2)
+                    await asyncio.sleep(3) # Wait for potential alert
                     wait_time = dialog_data["wait_time"]
                     await take_screenshot(page)
 
                     if wait_time > 0:
+                        print(f"Cooldown detected from popup: {wait_time} seconds.")
                         SECONDS_REMAINING = wait_time
-                        NEXT_RUN = time.strftime('%I:%M:%S %p', time.localtime(time.time() + wait_time))
-                        
-                        while SECONDS_REMAINING > 0:
-                            # Set Next Check to 10 minutes or remaining time
-                            SECONDS_UNTIL_CHECK = min(SECONDS_REMAINING, 600)
-                            
-                            while SECONDS_UNTIL_CHECK > 0:
-                                m, s = divmod(SECONDS_REMAINING, 60)
-                                h, m = divmod(m, 60)
-                                STATUS = f"Cooldown: {h:02d}:{m:02d}:{s:02d} remaining..."
-                                await asyncio.sleep(1)
-                                SECONDS_REMAINING -= 1
-                                SECONDS_UNTIL_CHECK -= 1
-                            
-                            if SECONDS_REMAINING > 0:
-                                print("10-minute check: Re-verifying site status...")
-                                break # Re-run main navigation
                     else:
-                        print("Submission successful! Waiting for 10-hour cycle...")
-                        SECONDS_REMAINING = 10 * 3600
-                        NEXT_RUN = time.strftime('%I:%M:%S %p', time.localtime(time.time() + SECONDS_REMAINING))
-                        while SECONDS_REMAINING > 0:
-                            SECONDS_UNTIL_CHECK = min(SECONDS_REMAINING, 600)
-                            while SECONDS_UNTIL_CHECK > 0:
-                                m, s = divmod(SECONDS_REMAINING, 60)
-                                h, m = divmod(m, 60)
-                                STATUS = f"Next Run: {h:02d}:{m:02d}:{s:02d} left..."
-                                await asyncio.sleep(1)
-                                SECONDS_REMAINING -= 1
-                                SECONDS_UNTIL_CHECK -= 1
-                            break # Re-check every 10 minutes
+                        print("Submission successful or no cooldown popup. Next submit in 10 minutes.")
+                        SECONDS_REMAINING = 600 # 10 minutes default
+                    
+                    NEXT_RUN = time.strftime('%I:%M:%S %p', time.localtime(time.time() + SECONDS_REMAINING))
+                    
+                    # Wait phase with 10-minute refreshes
+                    while SECONDS_REMAINING > 0:
+                        # Re-check/Refresh every 10 minutes or remaining time
+                        SECONDS_UNTIL_CHECK = min(SECONDS_REMAINING, 600)
+                        
+                        while SECONDS_UNTIL_CHECK > 0:
+                            m, s = divmod(SECONDS_REMAINING, 60)
+                            h, m = divmod(m, 60)
+                            if wait_time > 0:
+                                STATUS = f"Cooldown: {h:02d}:{m:02d}:{s:02d} remaining..."
+                            else:
+                                STATUS = f"Next Submission: {h:02d}:{m:02d}:{s:02d}..."
+                            
+                            await asyncio.sleep(1)
+                            SECONDS_REMAINING -= 1
+                            SECONDS_UNTIL_CHECK -= 1
+                        
+                        if SECONDS_REMAINING > 0:
+                            print("10-minute mark reached during wait. Refreshing page...")
+                            break # Break the outer loop to refresh and re-submit (or see if cooldown changed)
                 else:
-                    STATUS = "Error: Submit button not found. Retrying..."
+                    STATUS = "Error: Submit button not found. Retrying in 60s..."
+                    print("Submit button not found.")
                     await asyncio.sleep(60)
             except Exception as e:
                 STATUS = f"Loop Error: {str(e)[:50]}..."
