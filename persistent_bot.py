@@ -88,8 +88,8 @@ async def run_bot():
         while True:
             try:
                 global STATUS, LAST_UPDATE, NEXT_RUN, SECONDS_REMAINING, SECONDS_UNTIL_CHECK, LAST_CHECK
-                LAST_UPDATE = time.strftime('%I:%M:%S %p')
-                LAST_CHECK = time.strftime('%I:%M:%S %p')
+                LAST_UPDATE = time.strftime('%I:%M:%S %p', time.gmtime(time.time() + 6 * 3600))
+                LAST_CHECK = time.strftime('%I:%M:%S %p', time.gmtime(time.time() + 6 * 3600))
                 print(f"[{LAST_CHECK}] Refreshing target website: {URL}")
                 
                 await page.goto(URL)
@@ -102,8 +102,18 @@ async def run_bot():
 
                 # Fill the form
                 STATUS = f"Filling form (Name: {NAME}, UID: {UID})..."
-                await page.fill('input[name="Name"]', NAME)
-                await page.fill('input[name="FreeFireUID"]', UID)
+                await page.evaluate(f'''() => {{
+                    const nameInput = document.querySelector('input[name="Name"]');
+                    const uidInput = document.querySelector('input[name="FreeFireUID"]');
+                    if (nameInput) {{
+                        nameInput.value = "{NAME}";
+                        nameInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    }}
+                    if (uidInput) {{
+                        uidInput.value = "{UID}";
+                        uidInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    }}
+                }}''')
                 await take_screenshot(page)
 
                 # Submit
@@ -127,15 +137,15 @@ async def run_bot():
                         print(f"Cooldown detected from popup: {wait_time} seconds.")
                         SECONDS_REMAINING = wait_time
                     else:
-                        print("Submission successful or no cooldown popup. Next submit in 10 minutes.")
-                        SECONDS_REMAINING = 600 # 10 minutes default
+                        print("Submission successful or no cooldown popup. Next submit in 5 minutes.")
+                        SECONDS_REMAINING = 300 # 5 minutes default
                     
-                    NEXT_RUN = time.strftime('%I:%M:%S %p', time.localtime(time.time() + SECONDS_REMAINING))
+                    NEXT_RUN = time.strftime('%I:%M:%S %p', time.gmtime(time.time() + SECONDS_REMAINING + 6 * 3600))
                     
-                    # Wait phase with 10-minute refreshes
+                    # Wait phase with 5-minute refreshes
                     while SECONDS_REMAINING > 0:
-                        # Re-check/Refresh every 10 minutes or remaining time
-                        SECONDS_UNTIL_CHECK = min(SECONDS_REMAINING, 600)
+                        # Re-check/Refresh every 5 minutes or remaining time
+                        SECONDS_UNTIL_CHECK = min(SECONDS_REMAINING, 300)
                         
                         while SECONDS_UNTIL_CHECK > 0:
                             m, s = divmod(SECONDS_REMAINING, 60)
@@ -150,7 +160,7 @@ async def run_bot():
                             SECONDS_UNTIL_CHECK -= 1
                         
                         if SECONDS_REMAINING > 0:
-                            print("10-minute mark reached during wait. Refreshing page...")
+                            print("5-minute mark reached during wait. Refreshing page...")
                             break # Break the outer loop to refresh and re-submit (or see if cooldown changed)
                 else:
                     STATUS = "Error: Submit button not found. Retrying in 60s..."
